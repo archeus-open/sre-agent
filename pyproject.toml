@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sreagent"
+version = "0.1.0"
+description = "Prototype agentic AI system for SRE incident response (SEV2 runbooks, read-only host access, code sandbox, ticket updates)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "httpx>=0.27",
+    "pydantic>=2.6",
+    "numpy>=1.26",
+    "mcp>=1.6,<2",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+rag = ["sentence-transformers>=2.6", "faiss-cpu>=1.8"]
+ssh = ["paramiko>=3.4"]
+test = ["pytest>=8", "pytest-asyncio>=0.23"]
+dev = ["ruff>=0.4"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

@@ -1,0 +1,152 @@
+"""MCP client manager: connect to many MCP servers, discover + call tools.
+
+Config format (see configs/mcp_servers.yaml)::
+
+    servers:
+      finance:
+        transport: stdio
+        command: python
+        args: ["-m", "sreagent.servers.finance_mcp"]
+        env: {}
+      marketdata:
+        transport: sse
+        url: "http://localhost:9000/sse"
+
+Usage::
+
+    async with MCPClientManager("configs/mcp_servers.yaml") as mgr:
+        tools = await mgr.list_all_tools()
+        result = await mgr.call_tool("finance", "get_quote", {"ticker": "AAPL"})
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+from contextlib import AsyncExitStack
+from dataclasses import dataclass, field
+from typing import Any
+
+import yaml
+
+
+@dataclass
+class MCPTool:
+    server: str
+    name: str
+    description: str
+    input_schema: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def qualified_name(self) -> str:
+        return f"{self.server}.{self.name}"
+
+
+class MCPClientManager:
+    def __init__(self, config: str | dict[str, Any]) -> None:
+        if isinstance(config, str):
+            with open(config) as fh:
+                config = yaml.safe_load(fh)
+        self.server_configs: dict[str, dict[str, Any]] = config.get("servers", {})
+        self._stack = AsyncExitStack()
+        self._sessions: dict[str, Any] = {}
+        self._lock = asyncio.Lock()
+
+    async def __aenter__(self) -> "MCPClientManager":
+        try:
+            from mcp import ClientSession  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "The 'mcp' package is not installed. Install it with: pip install 'finagent[mcp]'"
+            ) from exc
+        self._ClientSession = ClientSession
+        for name, cfg in self.server_configs.items():
+            await self._connect(name, cfg)
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await self._stack.aclose()
+        self._sessions.clear()
+
+    async def _connect(self, name: str, cfg: dict[str, Any]) -> None:
+        transport = cfg.get("transport", "stdio")
+        if transport == "stdio":
+            from mcp import StdioServerParameters  # type: ignore
+            from mcp.client.stdio import stdio_client  # type: ignore
+
+            params = StdioServerParameters(
+                command=cfg["command"],
+                args=cfg.get("args", []),
+                env={**os.environ, **cfg.get("env", {})},
+            )
+            read, write = await self._stack.enter_async_context(stdio_client(params))
+        elif transport in ("sse", "http"):
+            url = cfg["url"]
+            if transport == "sse":
+                from mcp.client.sse import sse_client  # type: ignore
+
+                read, write = await self._stack.enter_async_context(sse_client(url))
+            else:
+                from mcp.client.streamablehttp import streamablehttp_client  # type: ignore
+
+                read, write, _ = await self._stack.enter_async_context(streamablehttp_client(url))
+        else:
+            raise ValueError(f"unknown MCP transport '{transport}' for server '{name}'")
+        session = await self._stack.enter_async_context(self._ClientSession(read, write))
+        await session.initialize()
+        self._sessions[name] = session
+
+    @property
+    def servers(self) -> list[str]:
+        return list(self._sessions)
+
+    async def list_all_tools(self) -> list[MCPTool]:
+        tools: list[MCPTool] = []
+        for server, session in self._sessions.items():
+            result = await session.list_tools()
+            for t in result.tools:
+                schema = (
+                    getattr(t, "input_schema", None)
+                    or getattr(t, "inputSchema", None)  # mcp 1.x
+                    or {}
+                )
+                tools.append(
+                    MCPTool(
+                        server=server,
+                        name=t.name,
+                        description=t.description or "",
+                        input_schema=schema,
+                    )
+                )
+        return tools
+
+    async def call_tool(self, server: str, tool: str, arguments: dict[str, Any]) -> Any:
+        """Call a tool; returns the decoded payload (JSON if possible)."""
+        session = self._sessions.get(server)
+        if session is None:
+            raise KeyError(f"MCP server '{server}' is not connected")
+        async with self._lock:
+            result = await session.call_tool(tool, arguments)
+        return _decode_result(result)
+
+    async def tools_prompt_block(self) -> str:
+        """Render tool catalogue for the agent's system prompt."""
+        lines = ["Available MCP tools (call via the ACT action):"]
+        for tool in await self.list_all_tools():
+            lines.append(f"- {tool.qualified_name}: {tool.description}")
+        return "\n".join(lines)
+
+
+def _decode_result(result: Any) -> Any:
+    import json
+
+    texts: list[str] = []
+    for block in getattr(result, "content", []) or []:
+        text = getattr(block, "text", None)
+        if text:
+            texts.append(text)
+    payload = "\n".join(texts)
+    try:
+        return json.loads(payload)
+    except Exception:  # noqa: BLE001
+        return payload

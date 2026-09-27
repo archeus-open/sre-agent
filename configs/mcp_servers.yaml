@@ -1,0 +1,10 @@
+mcpServers:
+  tickets:
+    command: python
+    args: ["-m", "sreagent.servers.tickets_mcp"]
+  hosts:
+    command: python
+    args: ["-m", "sreagent.servers.hosts_mcp"]
+  repo:
+    command: python
+    args: ["-m", "sreagent.servers.repo_mcp"]
