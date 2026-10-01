@@ -22,6 +22,7 @@ dependencies = [
 [project.optional-dependencies]
 rag = ["sentence-transformers>=2.6", "faiss-cpu>=1.8"]
 ssh = ["paramiko>=3.4"]
+redis = ["redis>=5.0"]
 test = ["pytest>=8", "pytest-asyncio>=0.23"]
 dev = ["ruff>=0.4"]
 

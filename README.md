@@ -39,6 +39,31 @@ python -m pytest
 python examples\triage_direct.py
 ```
 
+## New: memory, multi-model orchestration, API gateway
+
+- **`src/sreagent/memory/` — context builder.** Conversation turns, incident
+  state, and pinned facts live in a cache (Redis when `SREAGENT_REDIS_URL`
+  is reachable, otherwise an in-memory fallback — no server needed).
+  `ContextBuilder` assembles them into prioritized prompt sections for the
+  existing `ContextManager`. Optional install: `pip install -e ".[redis]"`.
+- **`src/sreagent/llm/` — agent orchestration.** One interface, several
+  models: `mock` (deterministic demo, default — no key, no cost),
+  `openai`/`codex` (user's `OPENAI_API_KEY`), `claude` (user's
+  `ANTHROPIC_API_KEY`). `LLMOrchestrator` routes per call and falls back
+  to mock when a paid provider fails. Select with `SREAGENT_LLM`.
+- **`src/sreagent/gateway/` — API gateway.** FastAPI reference gateway
+  with mock API-key auth (`X-API-Key`), role-based authz
+  (`viewer`/`operator`/`admin`), per-key token-bucket rate limiting
+  (429 + `Retry-After`), and round-robin load balancing with failure
+  cooldown across upstream model workers.
+
+```bash
+make layers-demo   # guided tour: cache -> mock LLM -> gateway (401/403/200/429)
+```
+
+Full walkthrough (curl recipes, Redis + real-key graduation, hardening
+checklist): [`docs/DEMO_WALKTHROUGH.md`](docs/DEMO_WALKTHROUGH.md).
+
 ## Architecture
 
 ```

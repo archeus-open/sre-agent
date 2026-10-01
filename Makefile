@@ -8,7 +8,7 @@ else
 	VENV_PIP := .venv/bin/pip
 endif
 
-.PHONY: install test demo agent-demo server clean
+.PHONY: install test demo agent-demo layers-demo server clean
 
 install:
 	$(PY) -m venv .venv
@@ -25,6 +25,9 @@ demo:
 
 agent-demo:
 	$(VENV_PY) examples/run_demo.py
+
+layers-demo:
+	$(VENV_PY) examples/demo_layers.py
 
 clean:
 	$(VENV_PY) -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in list(pathlib.Path('.').rglob('__pycache__')) + [pathlib.Path('.pytest_cache')]]"
