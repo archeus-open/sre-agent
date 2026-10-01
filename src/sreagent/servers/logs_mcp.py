@@ -17,6 +17,8 @@ from sreagent.logs import LogStore
 from sreagent.servers.manifest import run_main
 
 mcp = FastMCP("logs")
+
+SERVER_VERSION = "0.1.0"
 _store = LogStore()
 
 
@@ -71,7 +73,7 @@ def log_error_summary(host: str, since_minutes: float = 60) -> str:
 
 
 def main() -> None:
-    run_main(mcp, "logs")
+    run_main(mcp, "logs", SERVER_VERSION)
 
 
 if __name__ == "__main__":

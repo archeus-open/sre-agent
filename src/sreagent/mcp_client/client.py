@@ -146,13 +146,23 @@ class MCPClientManager:
     async def get_manifest(self, server: str) -> dict[str, Any]:
         """Fetch (and cache) the server's manifest.json.
 
-        Runs the server's own command with ``--manifest`` appended, so the
-        manifest always matches the code — no separate file to drift.
-        Servers that don't support it (or non-stdio transports) yield ``{}``
-        and callers degrade gracefully.
+        Prefers the static ``manifest.json`` bundled with each server
+        (``sreagent/servers/manifests/<server>.json``) — no subprocess, no
+        generation at runtime. Falls back to running the server's own
+        command with ``--manifest`` for third-party servers, then ``{}``.
         """
         if server in self._manifests:
             return self._manifests[server]
+        from sreagent.servers.manifest import load_manifest
+
+        manifest = load_manifest(server)
+        if not manifest.get("tools"):
+            manifest = await self._manifest_via_subprocess(server)
+        self._manifests[server] = manifest
+        return manifest
+
+    async def _manifest_via_subprocess(self, server: str) -> dict[str, Any]:
+        """Legacy path: ask the server process itself for its manifest."""
         manifest: dict[str, Any] = {}
         cfg = self.server_configs.get(server, {})
         try:
@@ -173,7 +183,6 @@ class MCPClientManager:
                     manifest = json.loads(out.decode())
         except Exception:  # noqa: BLE001
             manifest = {}
-        self._manifests[server] = manifest
         return manifest
 
     async def tools_prompt_block(self) -> str:

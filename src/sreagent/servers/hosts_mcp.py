@@ -17,6 +17,8 @@ from sreagent.servers.manifest import run_main
 from sreagent.hosts import HostInventory
 
 mcp = FastMCP("hosts")
+
+SERVER_VERSION = "0.1.0"
 _inventory = HostInventory.demo()
 
 
@@ -61,7 +63,7 @@ def run_command(host: str, command: str) -> str:
 
 
 def main() -> None:
-    run_main(mcp, "hosts")
+    run_main(mcp, "hosts", SERVER_VERSION)
 
 
 if __name__ == "__main__":

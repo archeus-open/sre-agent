@@ -1,32 +1,49 @@
 """manifest.json support for MCP servers.
 
-Every sreagent MCP server can emit a machine-readable tool manifest::
+Each server ships a **static** ``manifest.json``
+(``src/sreagent/servers/manifests/<server>.json``) describing its tools —
+the contract the MCP client uses for tool calling (argument validation,
+catalog rendering) without a live server round-trip.
 
-    python -m sreagent.servers.logs_mcp --manifest
+Versioning workflow: each server module carries ``SERVER_VERSION``. When a
+server's tools change, bump its ``SERVER_VERSION`` and regenerate::
 
-The manifest is the contract the MCP client uses for tool calling: it
-drives argument validation and the agent's tool catalogue without a live
-server round-trip.
+    python -m sreagent.servers.manifest refresh
+
+``refresh`` rewrites every static manifest from the code and stamps the
+current server version, so the file and the code can never silently drift.
 """
 
 from __future__ import annotations
 
 import asyncio
+import importlib
+import importlib.resources
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
 MANIFEST_VERSION = 1
-SERVER_VERSION = "0.1.0"
+
+#: server name -> module holding ``mcp`` and ``SERVER_VERSION``
+SERVERS: dict[str, str] = {
+    "tickets": "sreagent.servers.tickets_mcp",
+    "hosts": "sreagent.servers.hosts_mcp",
+    "logs": "sreagent.servers.logs_mcp",
+    "repo": "sreagent.servers.repo_mcp",
+}
+
+MANIFESTS_DIR = Path(__file__).resolve().parent / "manifests"
 
 
-def export_manifest(mcp: Any, server_name: str) -> dict[str, Any]:
-    """Build ``{"server", "tools": [{name, description, input_schema}]}``."""
+def export_manifest(mcp: Any, server_name: str, version: str = "0.1.0") -> dict[str, Any]:
+    """Build ``{"server", "version", "tools": [{name, description, input_schema}]}``."""
     tools = _collect_tools(mcp)
     return {
         "manifest_version": MANIFEST_VERSION,
         "server": server_name,
-        "version": SERVER_VERSION,
+        "version": version,
         "tools": [
             {
                 "name": t["name"],
@@ -116,10 +133,62 @@ def _type_ok(value: Any, expected: str) -> bool:
     return True  # unknown / union types: don't block
 
 
-def run_main(mcp: Any, server_name: str) -> None:
+def run_main(mcp: Any, server_name: str, version: str = "0.1.0") -> None:
     """``main()`` replacement: ``--manifest`` prints manifest.json,
     otherwise the MCP server runs as before."""
     if "--manifest" in sys.argv:
-        print(json.dumps(export_manifest(mcp, server_name), indent=2))
+        print(json.dumps(export_manifest(mcp, server_name, version), indent=2))
         return
     mcp.run()
+
+
+def manifest_path(server_name: str) -> Path:
+    return MANIFESTS_DIR / f"{server_name}.json"
+
+
+def load_manifest(server_name: str) -> dict[str, Any]:
+    """Read the static ``manifest.json`` for a server.
+
+    Prefers the installed package resources; falls back to the source
+    tree so it also works from a plain checkout.
+    """
+    resource = importlib.resources.files("sreagent.servers.manifests").joinpath(
+        f"{server_name}.json"
+    )
+    try:
+        return json.loads(resource.read_text())
+    except (FileNotFoundError, ModuleNotFoundError, NotADirectoryError):
+        path = manifest_path(server_name)
+        if path.exists():
+            return json.loads(path.read_text())
+    return {}
+
+
+def refresh_all() -> list[str]:
+    """Regenerate every static manifest from the server code, stamping each
+    server's current ``SERVER_VERSION``. Run after changing any server's
+    tools (and bumping its version). Returns the files written."""
+    MANIFESTS_DIR.mkdir(parents=True, exist_ok=True)
+    written: list[str] = []
+    for name, module_name in SERVERS.items():
+        module = importlib.import_module(module_name)
+        version = getattr(module, "SERVER_VERSION", "0.1.0")
+        manifest = export_manifest(module.mcp, name, version)
+        path = manifest_path(name)
+        path.write_text(json.dumps(manifest, indent=2) + "\n")
+        written.append(str(path))
+    return written
+
+
+def main(argv: list[str] | None = None) -> None:
+    argv = argv if argv is not None else sys.argv[1:]
+    if argv == ["refresh"]:
+        for path in refresh_all():
+            print(f"wrote {path}")
+    else:
+        print("usage: python -m sreagent.servers.manifest refresh", file=sys.stderr)
+        raise SystemExit(2)
+
+
+if __name__ == "__main__":
+    main()

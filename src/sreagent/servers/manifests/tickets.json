@@ -1,0 +1,156 @@
+{
+  "manifest_version": 1,
+  "server": "tickets",
+  "version": "0.1.0",
+  "tools": [
+    {
+      "name": "list_tickets",
+      "description": "List incident tickets, optionally filtered by severity (e.g. SEV2) and status.",
+      "input_schema": {
+        "properties": {
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Severity"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "title": "list_ticketsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_ticket",
+      "description": "Fetch one ticket with its full timeline.",
+      "input_schema": {
+        "properties": {
+          "ticket_id": {
+            "title": "Ticket Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id"
+        ],
+        "title": "get_ticketArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "add_timeline_entry",
+      "description": "Append a timestamped entry to the ticket timeline (findings, evidence).",
+      "input_schema": {
+        "properties": {
+          "ticket_id": {
+            "title": "Ticket Id",
+            "type": "string"
+          },
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id",
+          "author",
+          "text"
+        ],
+        "title": "add_timeline_entryArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "update_status",
+      "description": "Move a ticket: OPEN -> INVESTIGATING -> MITIGATED -> RESOLVED.",
+      "input_schema": {
+        "properties": {
+          "ticket_id": {
+            "title": "Ticket Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id",
+          "status"
+        ],
+        "title": "update_statusArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "assign",
+      "description": "Assign the ticket to someone (e.g. 'sre-agent').",
+      "input_schema": {
+        "properties": {
+          "ticket_id": {
+            "title": "Ticket Id",
+            "type": "string"
+          },
+          "assignee": {
+            "title": "Assignee",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id",
+          "assignee"
+        ],
+        "title": "assignArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "set_root_cause",
+      "description": "Record the confirmed root cause and recommended remediation.",
+      "input_schema": {
+        "properties": {
+          "ticket_id": {
+            "title": "Ticket Id",
+            "type": "string"
+          },
+          "root_cause": {
+            "title": "Root Cause",
+            "type": "string"
+          },
+          "remediation": {
+            "default": "",
+            "title": "Remediation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id",
+          "root_cause"
+        ],
+        "title": "set_root_causeArguments",
+        "type": "object"
+      }
+    }
+  ]
+}

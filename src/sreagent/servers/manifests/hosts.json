@@ -1,0 +1,80 @@
+{
+  "manifest_version": 1,
+  "server": "hosts",
+  "version": "0.1.0",
+  "tools": [
+    {
+      "name": "list_hosts",
+      "description": "List hosts, optionally filtered by service or role.",
+      "input_schema": {
+        "properties": {
+          "service": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Service"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Role"
+          }
+        },
+        "title": "list_hostsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "describe_host",
+      "description": "Show inventory details for one host.",
+      "input_schema": {
+        "properties": {
+          "host": {
+            "title": "Host",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "title": "describe_hostArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "run_command",
+      "description": "Run a READ-ONLY diagnostic command on a host.\n\n    The read-only policy is enforced first: anything not on the allowlist\n    (writes, restarts, kills, package installs, shell tricks) is blocked\n    with exit code 126 and never reaches the host.\n    ",
+      "input_schema": {
+        "properties": {
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "command"
+        ],
+        "title": "run_commandArguments",
+        "type": "object"
+      }
+    }
+  ]
+}

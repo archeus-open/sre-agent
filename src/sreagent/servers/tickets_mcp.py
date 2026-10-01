@@ -16,6 +16,8 @@ from sreagent.servers.manifest import run_main
 from sreagent.tickets import TicketStatus, TicketStore
 
 mcp = FastMCP("tickets")
+
+SERVER_VERSION = "0.1.0"
 _store = TicketStore.seed_demo()
 
 
@@ -94,7 +96,7 @@ def set_root_cause(ticket_id: str, root_cause: str, remediation: str = "") -> st
 
 
 def main() -> None:
-    run_main(mcp, "tickets")
+    run_main(mcp, "tickets", SERVER_VERSION)
 
 
 if __name__ == "__main__":

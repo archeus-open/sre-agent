@@ -17,6 +17,8 @@ from sreagent.servers.manifest import run_main
 from sreagent.sandbox import SandboxManager
 
 mcp = FastMCP("repo")
+
+SERVER_VERSION = "0.1.0"
 _manager = SandboxManager()
 
 
@@ -81,7 +83,7 @@ def run_in_sandbox(sandbox: str, command: str, timeout: int = 120) -> str:
 
 
 def main() -> None:
-    run_main(mcp, "repo")
+    run_main(mcp, "repo", SERVER_VERSION)
 
 
 if __name__ == "__main__":

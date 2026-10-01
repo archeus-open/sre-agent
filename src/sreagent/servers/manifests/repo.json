@@ -1,0 +1,125 @@
+{
+  "manifest_version": 1,
+  "server": "repo",
+  "version": "0.1.0",
+  "tools": [
+    {
+      "name": "clone_repo",
+      "description": "Clone a git URL (or copy a local directory) into a sandbox.",
+      "input_schema": {
+        "properties": {
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "name": {
+            "default": "sandbox-1",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "clone_repoArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_files",
+      "description": "List files in the sandbox.",
+      "input_schema": {
+        "properties": {
+          "sandbox": {
+            "default": "sandbox-1",
+            "title": "Sandbox",
+            "type": "string"
+          },
+          "subdir": {
+            "default": "",
+            "title": "Subdir",
+            "type": "string"
+          }
+        },
+        "title": "list_filesArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "read_file",
+      "description": "Read a file from the sandbox (capped at 20k chars).",
+      "input_schema": {
+        "properties": {
+          "sandbox": {
+            "title": "Sandbox",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sandbox",
+          "path"
+        ],
+        "title": "read_fileArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "search_code",
+      "description": "Regex-search the sandbox code; returns file/line/match hits.",
+      "input_schema": {
+        "properties": {
+          "sandbox": {
+            "title": "Sandbox",
+            "type": "string"
+          },
+          "pattern": {
+            "title": "Pattern",
+            "type": "string"
+          },
+          "glob": {
+            "default": "*.py",
+            "title": "Glob",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sandbox",
+          "pattern"
+        ],
+        "title": "search_codeArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "run_in_sandbox",
+      "description": "Run a command inside the sandbox (no shell; destructive tokens blocked).\n\n    Use for repro scripts and diagnostics, e.g. \"python3 repro_leak.py\".\n    ",
+      "input_schema": {
+        "properties": {
+          "sandbox": {
+            "title": "Sandbox",
+            "type": "string"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "timeout": {
+            "default": 120,
+            "title": "Timeout",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sandbox",
+          "command"
+        ],
+        "title": "run_in_sandboxArguments",
+        "type": "object"
+      }
+    }
+  ]
+}

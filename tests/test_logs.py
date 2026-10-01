@@ -77,8 +77,9 @@ def test_mcp_tail_logs_tool():
 def test_logs_manifest_lists_three_tools():
     from sreagent.servers.logs_mcp import mcp
 
-    manifest = manifest_mod.export_manifest(mcp, "logs")
+    manifest = manifest_mod.export_manifest(mcp, "logs", "0.1.0")
     assert manifest["server"] == "logs"
+    assert manifest["version"] == "0.1.0"
     names = [t["name"] for t in manifest["tools"]]
     assert names == ["search_logs", "tail_logs", "log_error_summary"]
     schema = next(t["input_schema"] for t in manifest["tools"] if t["name"] == "search_logs")

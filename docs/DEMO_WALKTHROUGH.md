@@ -65,20 +65,31 @@ The LLM reasons through the runbook **and** the logs: step 3 searches
 each round's observation is likewise fed back into context (`round-N`
 sections, last 6 kept) so the next action builds on accumulated evidence.
 
-## 0c. Tool manifests
+## 0c. Tool manifests (static manifest.json per server)
 
-Every MCP server describes its tools as `manifest.json`:
+Each MCP server ships a versioned, static `manifest.json`
+(`src/sreagent/servers/manifests/<server>.json`) — the tool contract the
+client uses for calling: argument validation and catalog rendering with
+no live server round-trip and nothing generated at runtime.
 
 ```bash
-.venv/bin/python -m sreagent.servers.logs_mcp --manifest
+cat src/sreagent/servers/manifests/logs.json   # tools, input schemas, version
 ```
 
-The client fetches the manifest (runs the server's own command with
-`--manifest`, so it can't drift) and validates tool arguments *before*
-calling — a bad call fails fast locally:
+When a server's tools change: bump its `SERVER_VERSION` in the server
+module, then regenerate:
+
+```bash
+.venv/bin/python -m sreagent.servers.manifest refresh
+```
+
+`refresh` rewrites all four manifests from the code and stamps each
+server's current version, so file and code can't silently drift. The
+client prefers the bundled static file and only falls back to
+`--manifest` subprocess probing for third-party servers:
 
 ```python
-await mcp.get_manifest("logs")          # cached dict
+await mcp.get_manifest("logs")          # static file, cached
 await mcp.call_tool("logs", "search_logs", {"host": "h"})  # ValueError: missing 'query'
 ```
 

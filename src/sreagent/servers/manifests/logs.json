@@ -1,0 +1,107 @@
+{
+  "manifest_version": 1,
+  "server": "logs",
+  "version": "0.1.0",
+  "tools": [
+    {
+      "name": "search_logs",
+      "description": "Case-insensitive substring search over one host's logs, newest first.\n\n    Args:\n        host: e.g. \"checkout-api-02\".\n        query: substring to match, e.g. \"Out of memory\" or \"500\".\n        level: minimum level (DEBUG/INFO/WARNING/ERROR/CRITICAL).\n        since_minutes: lookback window.\n        limit: max lines returned.\n    ",
+      "input_schema": {
+        "properties": {
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Level"
+          },
+          "since_minutes": {
+            "default": 60,
+            "title": "Since Minutes",
+            "type": "number"
+          },
+          "limit": {
+            "default": 50,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "query"
+        ],
+        "title": "search_logsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "tail_logs",
+      "description": "Last N log lines for a host, oldest first.",
+      "input_schema": {
+        "properties": {
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "lines": {
+            "default": 40,
+            "title": "Lines",
+            "type": "integer"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Level"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "title": "tail_logsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "log_error_summary",
+      "description": "Error/critical counts by level plus the top repeated message\n    signatures for a host \u2014 the fastest way to spot what's actually\n    failing.",
+      "input_schema": {
+        "properties": {
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "since_minutes": {
+            "default": 60,
+            "title": "Since Minutes",
+            "type": "number"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "title": "log_error_summaryArguments",
+        "type": "object"
+      }
+    }
+  ]
+}

@@ -89,8 +89,10 @@ ContextBuilder ─► Redis (or in-memory fallback): turns, incident state, fact
 - `src/sreagent/hosts/` — `CommandPolicy` (default-deny read-only allowlist), `HostInventory`, `SimulatedBackend` (deterministic scripted fleet) and `SSHBackend` (real SSH via paramiko, `pip install sreagent[ssh]`; still policy-gated).
 - `src/sreagent/sandbox/` — `SandboxManager.clone()` copies a local dir or `git clone`s a URL; `Sandbox.search/read_file/run` with `shell=False`, timeouts, and a destructive-token denylist.
 - `src/sreagent/servers/` — `tickets_mcp.py`, `hosts_mcp.py`, `logs_mcp.py`, `repo_mcp.py`.
-  Every server prints its tool manifest with `python -m sreagent.servers.<name>_mcp --manifest`
-  (`manifest.json` contract); the client fetches it to validate tool arguments before calling.
+  Each server is versioned (`SERVER_VERSION`) and ships a static
+  `manifests/<server>.json` tool contract; regenerate with
+  `python -m sreagent.servers.manifest refresh` after bumping the version.
+  The client reads the bundled manifest to validate tool arguments before calling.
 - `src/sreagent/agent/` — `SREAgent` staged pipeline + ReAct loop, prompts.
 - Reused from the finagent/oms-agent lineage: OpenAI-compatible inference server, priority/token-budget context manager, multi-server MCP client, RAG pipeline.
 
