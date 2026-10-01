@@ -12,6 +12,8 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
+from sreagent.servers.manifest import run_main
+
 from sreagent.sandbox import SandboxManager
 
 mcp = FastMCP("repo")
@@ -79,7 +81,7 @@ def run_in_sandbox(sandbox: str, command: str, timeout: int = 120) -> str:
 
 
 def main() -> None:
-    mcp.run()
+    run_main(mcp, "repo")
 
 
 if __name__ == "__main__":

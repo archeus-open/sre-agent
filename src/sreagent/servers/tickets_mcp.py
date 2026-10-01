@@ -11,6 +11,8 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
+from sreagent.servers.manifest import run_main
+
 from sreagent.tickets import TicketStatus, TicketStore
 
 mcp = FastMCP("tickets")
@@ -92,7 +94,7 @@ def set_root_cause(ticket_id: str, root_cause: str, remediation: str = "") -> st
 
 
 def main() -> None:
-    mcp.run()
+    run_main(mcp, "tickets")
 
 
 if __name__ == "__main__":

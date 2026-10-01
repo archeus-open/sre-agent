@@ -5,6 +5,9 @@ mcpServers:
   hosts:
     command: python
     args: ["-m", "sreagent.servers.hosts_mcp"]
+  logs:
+    command: python
+    args: ["-m", "sreagent.servers.logs_mcp"]
   repo:
     command: python
     args: ["-m", "sreagent.servers.repo_mcp"]

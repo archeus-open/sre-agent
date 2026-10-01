@@ -27,6 +27,7 @@ def mcp_config(tmp_path):
                     "args": ["-m", "sreagent.servers.tickets_mcp"],
                     "env": {"SREAGENT_TICKET_DB": db}},
         "hosts": {"command": exe, "args": ["-m", "sreagent.servers.hosts_mcp"]},
+        "logs": {"command": exe, "args": ["-m", "sreagent.servers.logs_mcp"]},
         "repo": {"command": exe, "args": ["-m", "sreagent.servers.repo_mcp"]},
     }}
 
@@ -41,7 +42,7 @@ async def test_staged_incident_response_updates_ticket(monkeypatch, mcp_config):
     )
 
     async with MCPClientManager(mcp_config) as mcp:
-        assert set(mcp.servers) == {"tickets", "hosts", "repo"}
+        assert set(mcp.servers) == {"tickets", "hosts", "logs", "repo"}
         agent = SREAgent(
             inference=inference,
             context=ContextManager(max_tokens=12000),
@@ -60,7 +61,11 @@ async def test_staged_incident_response_updates_ticket(monkeypatch, mcp_config):
     assert report.ticket_id == "SEV2-1042"
     assert "ORDER_CACHE" in report.report
     assert report.timeline_entries >= 3
-    assert report.sources  # ticket, runbook, hosts, repo, ticket-update
+    assert report.sources  # ticket, runbook, logs, hosts, repo, ticket-update
+    assert any("logs.search_logs" in s for s in report.sources)
+    # log evidence made it into the LLM context
+    assert "log evidence" in " ".join(
+        s for s in report.context_stats if s.startswith("tokens:"))
 
     assert ticket["status"] == "INVESTIGATING"
     assert ticket["assignee"] == "sre-agent"
@@ -85,3 +90,50 @@ async def test_staged_incident_response_unknown_ticket(mcp_config):
             assert "not found" in str(exc)
         else:
             raise AssertionError("expected ValueError")
+
+
+class _ScriptedInference:
+    """Returns fenced-json ReAct actions, then a final answer."""
+
+    def __init__(self, script):
+        self.script = list(script)
+
+    def chat(self, messages, **kw):
+        return self.script.pop(0)
+
+
+class _FakeMCP:
+    async def tools_prompt_block(self):
+        return "Available MCP tools: mcp.logs.search_logs"
+
+    async def call_tool(self, server, tool, args):
+        if (server, tool) == ("tickets", "get_ticket"):
+            return {"ticket": {"ticket_id": "SEV2-1042", "title": "OOM on checkout-api",
+                               "symptoms": "worker OOM-killed"}}
+        assert (server, tool) == ("logs", "search_logs")
+        return {"lines": [{"msg": "Out of memory: Killed process 2291 (gunicorn)"}]}
+
+
+async def test_react_feeds_observations_into_context():
+    inference = _ScriptedInference([
+        '```json\n{"action": "mcp.logs.search_logs", '
+        '"args": {"host": "checkout-api-02", "query": "Out of memory"}}\n```',
+        '```json\n{"action": "final", "answer": "RCA: OOM-killed worker"}\n```',
+    ])
+    agent = SREAgent(
+        inference=inference,
+        context=ContextManager(max_tokens=8000),
+        rag=None,
+        mcp=_FakeMCP(),
+        runbooks=None,
+    )
+    report = await agent.run_react("SEV2-1042")
+
+    assert report.rounds == 2
+    assert report.sources == ["[round 1] mcp.logs.search_logs"]
+    assert "OOM-killed worker" in report.report
+    # the round's observation was fed into context for the next action
+    sections = agent.context.stats()
+    assert any(k == "tokens:round-1" for k in sections)
+    assert "Out of memory" in " ".join(
+        m["content"] for m in agent.context.build_messages())

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -23,6 +24,8 @@ from ..context.manager import ContextManager
 from ..inference.client import InferenceClient
 from ..runbooks import RunbookLoader
 from . import prompts
+
+log = logging.getLogger(__name__)
 
 _FENCE_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 _EVIDENCE_RES = [
@@ -83,6 +86,24 @@ class SREAgent:
                 return {"raw": data}
         return data if isinstance(data, dict) else {"raw": data}
 
+    @staticmethod
+    def _log_queries(ticket: dict, runbook) -> list[str]:
+        """Error-signature queries for the logs MCP, derived from the
+        ticket symptoms and the matched runbook name."""
+        text = f"{ticket.get('title', '')} {ticket.get('symptoms', '')} "
+        text += runbook.name if runbook else ""
+        text = text.lower()
+        queries: list[str] = []
+        if any(k in text for k in ("oom", "out of memory", "memory")):
+            queries.append("Out of memory")
+        if "500" in text or "5xx" in text:
+            queries.append(" 500 ")
+        if any(k in text for k in ("exception", "traceback", "error")):
+            queries.append("Traceback")
+        queries.append("ERROR")
+        # de-dupe, keep order
+        return list(dict.fromkeys(queries))
+
     # -- staged pipeline ------------------------------------------------
     async def run_incident_response(self, ticket_id: str) -> IncidentReport:
         sources: list[str] = []
@@ -125,9 +146,33 @@ class SREAgent:
             )
             sources.append(f"[runbook] {runbook.name}")
 
+        # 2b. Log search on affected hosts, guided by runbook + symptoms.
+        # The logs server is optional: skip gracefully when not connected.
+        log_lines: list[str] = []
+        anomalies: list[str] = []
+        try:
+            for host in ticket.get("affected_hosts", []):
+                for query in self._log_queries(ticket, runbook)[:3]:
+                    hits = (await self._tool("logs", "search_logs", {
+                        "host": host, "query": query, "limit": 15,
+                    })).get("lines", [])
+                    for h in hits[:8]:
+                        log_lines.append(f"[{h.get('ts')}] [{host}] {h.get('level')}: {h.get('msg')}")
+                        for rx, label in _EVIDENCE_RES:
+                            if rx.search(h.get("msg", "")):
+                                anomalies.append(f"{host}: {label} (via log search `{query}`)")
+                summary = (await self._tool("logs", "log_error_summary",
+                                           {"host": host})).get("top_signatures", [])
+                for sig in summary[:3]:
+                    log_lines.append(f"[{host}] recurring: {sig.get('signature')} x{sig.get('count')}")
+            if log_lines:
+                self.context.add_section("log evidence", "\n".join(log_lines[:40]), priority=87)
+                sources.append("[mcp] logs.search_logs")
+        except Exception as exc:  # noqa: BLE001 — logs MCP not connected; host evidence still applies
+            log.warning("Skipping log search step: %s", exc)
+
         # 3. Host evidence (read-only commands on affected hosts).
         evidence: list[str] = []
-        anomalies: list[str] = []
         for host in ticket.get("affected_hosts", []):
             for cmd in diag_commands:
                 res = (await self._tool("hosts", "run_command",
@@ -202,7 +247,7 @@ class SREAgent:
         if findings["anomalies"]:
             await self._tool("tickets", "add_timeline_entry", {
                 "ticket_id": ticket_id, "author": "sre-agent",
-                "text": "Host evidence (read-only):\n- " + "\n- ".join(sorted(set(anomalies)))})
+                "text": "Evidence (log search + read-only host commands):\n- " + "\n- ".join(sorted(set(anomalies)))})
             entries += 1
         if findings["code_suspects"]:
             await self._tool("tickets", "add_timeline_entry", {
@@ -275,6 +320,21 @@ class SREAgent:
         except Exception as exc:  # noqa: BLE001
             return f"(tool '{name}' error: {exc})"
 
+    def _remember_round(self, rounds: int, action: dict[str, Any], observation: str) -> None:
+        """Feed this round's action + observation into the context manager so
+        the LLM reasons over accumulated evidence when choosing the next
+        action. Keeps only the last 6 rounds to bound context size."""
+        self.context.add_section(
+            f"round-{rounds}",
+            f"action: {action.get('action')} "
+            f"args={json.dumps(action.get('args', {}))[:400]}\n"
+            f"observation: {observation[:1200]}",
+            priority=55,
+            summarizable=True,
+        )
+        for n in range(1, rounds - 5):
+            self.context.remove_section(f"round-{n}")
+
     async def run_react(self, ticket_id: str) -> IncidentReport:
         self.context.set_system(prompts.REACT_SYSTEM)
         if self.mcp is not None:
@@ -311,6 +371,7 @@ class SREAgent:
             history.append({"role": "assistant", "content": reply})
             history.append({"role": "user",
                             "content": f"Observation:\n{observation}\nContinue with the next json action."})
+            self._remember_round(rounds, action, observation)
             sources.append(f"[round {rounds}] {action.get('action')}")
         else:
             final_answer = final_answer or "(max rounds reached without a final report)"

@@ -12,6 +12,8 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
+from sreagent.servers.manifest import run_main
+
 from sreagent.hosts import HostInventory
 
 mcp = FastMCP("hosts")
@@ -59,7 +61,7 @@ def run_command(host: str, command: str) -> str:
 
 
 def main() -> None:
-    mcp.run()
+    run_main(mcp, "hosts")
 
 
 if __name__ == "__main__":

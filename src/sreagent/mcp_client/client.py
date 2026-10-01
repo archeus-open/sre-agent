@@ -22,7 +22,10 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import subprocess
+import sys
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from typing import Any
@@ -51,6 +54,7 @@ class MCPClientManager:
         self._stack = AsyncExitStack()
         self._sessions: dict[str, Any] = {}
         self._lock = asyncio.Lock()
+        self._manifests: dict[str, dict[str, Any]] = {}
 
     async def __aenter__(self) -> "MCPClientManager":
         try:
@@ -121,13 +125,56 @@ class MCPClientManager:
         return tools
 
     async def call_tool(self, server: str, tool: str, arguments: dict[str, Any]) -> Any:
-        """Call a tool; returns the decoded payload (JSON if possible)."""
+        """Call a tool; returns the decoded payload (JSON if possible).
+
+        When the server's manifest.json is available, arguments are
+        validated against the tool's input schema first — bad calls fail
+        fast locally instead of round-tripping to the server.
+        """
         session = self._sessions.get(server)
         if session is None:
             raise KeyError(f"MCP server '{server}' is not connected")
+        manifest = await self.get_manifest(server)
+        if manifest.get("tools"):
+            from sreagent.servers.manifest import validate_args
+
+            validate_args(manifest, tool, arguments)
         async with self._lock:
             result = await session.call_tool(tool, arguments)
         return _decode_result(result)
+
+    async def get_manifest(self, server: str) -> dict[str, Any]:
+        """Fetch (and cache) the server's manifest.json.
+
+        Runs the server's own command with ``--manifest`` appended, so the
+        manifest always matches the code — no separate file to drift.
+        Servers that don't support it (or non-stdio transports) yield ``{}``
+        and callers degrade gracefully.
+        """
+        if server in self._manifests:
+            return self._manifests[server]
+        manifest: dict[str, Any] = {}
+        cfg = self.server_configs.get(server, {})
+        try:
+            if cfg.get("transport", "stdio") == "stdio" and cfg.get("command"):
+                cmd = [cfg["command"], *(cfg.get("args", []))]
+                # resolve bare "python" the same way the manager would
+                if cmd[0] == "python":
+                    cmd[0] = sys.executable
+                env = {**os.environ, **cfg.get("env", {})}
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd, "--manifest",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
+                    env=env,
+                )
+                out, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+                if proc.returncode == 0 and out:
+                    manifest = json.loads(out.decode())
+        except Exception:  # noqa: BLE001
+            manifest = {}
+        self._manifests[server] = manifest
+        return manifest
 
     async def tools_prompt_block(self) -> str:
         """Render tool catalogue for the agent's system prompt."""

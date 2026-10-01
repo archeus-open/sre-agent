@@ -1,9 +1,13 @@
 # sre-agent demo walkthrough: memory → multi-model orchestration → API gateway
 
-A hands-on tour of the three new sre-agent layers. **Nothing here needs
+A hands-on tour of the sre-agent layers. **Nothing here needs
 credentials, a Redis server, or network access** — the whole tour runs on
-the in-memory cache, the mock LLM, and faked gateway upstreams. Each
-section ends with the "go real" step for production.
+the in-memory cache, the mock LLM, and faked gateway upstreams.
+
+The incident loop itself is covered by `make agent-demo`
+(`examples/run_demo.py`): ticket → runbook → **log search** → host
+lookup → repo download → sandbox repro → RCA, with each step printed.
+The sections below tour the supporting layers.
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌───────────────────┐
@@ -28,7 +32,54 @@ section ends with the "go real" step for production.
 ```bash
 cd sre-agent
 make install          # .venv + editable install (+ tests)
-make test             # 90 tests, all offline
+make test             # 108 tests, all offline
+```
+
+## 0b. Incident loop with log search (needs the inference server)
+
+```bash
+# terminal 1: echo backend = no model needed
+SREAGENT_BACKEND=echo .venv/bin/python examples/run_server.py
+
+# terminal 2: staged SEV2 response over 4 MCP servers
+.venv/bin/python examples/run_demo.py
+```
+
+Watch the `INVESTIGATION STEPS` section print the pipeline in order:
+
+```
+step 1. Ticket fetched and claimed
+step 2. Runbook matched (RAG + keyword)
+step 3. Log search on affected hosts — error signatures
+step 4. Host lookup — read-only diagnostics
+step 5. Code repository downloaded to sandbox
+step 6. Suspect code search in sandbox
+step 7. Sandbox repro run
+step 8. RCA — ticket updated with root cause
+```
+
+The LLM reasons through the runbook **and** the logs: step 3 searches
+`checkout-api-02` for the runbook's error signatures (`Out of memory`,
+` 500 `, `Traceback`), and whatever it finds lands in the prompt context
+(`log evidence` section) before host diagnostics run. In `run_react` mode
+each round's observation is likewise fed back into context (`round-N`
+sections, last 6 kept) so the next action builds on accumulated evidence.
+
+## 0c. Tool manifests
+
+Every MCP server describes its tools as `manifest.json`:
+
+```bash
+.venv/bin/python -m sreagent.servers.logs_mcp --manifest
+```
+
+The client fetches the manifest (runs the server's own command with
+`--manifest`, so it can't drift) and validates tool arguments *before*
+calling — a bad call fails fast locally:
+
+```python
+await mcp.get_manifest("logs")          # cached dict
+await mcp.call_tool("logs", "search_logs", {"host": "h"})  # ValueError: missing 'query'
 ```
 
 ## 1. Guided demo (2 minutes, zero setup)

@@ -69,21 +69,28 @@ checklist): [`docs/DEMO_WALKTHROUGH.md`](docs/DEMO_WALKTHROUGH.md).
 ```
 tickets ─┐
 hosts ───┼─► MCP servers (stdio) ─► MCPClientManager ─┐
-repo ────┘                                             │
-runbooks/*.md ─► RAGPipeline ─► runbook context ───────┤
+logs ────┤   (manifest.json per server;               │
+repo ────┘    client validates args pre-call) ────────┤
                                                       ▼
 SREAgent.run_incident_response(ticket_id)   # staged pipeline
-SREAgent.run_react(ticket_id)               # ReAct tool loop
+  ticket → runbook → LOG SEARCH → host evidence → repo/sandbox → RCA
+SREAgent.run_react(ticket_id)                # ReAct tool loop
+  # LLM reasons through runbook + logs; each round's observation is
+  # fed back into context for the next action
    │
    ▼
-InferenceClient ─► FastAPI server (echo | openai_compatible)
+LLMOrchestrator ─► mock | openai/codex | claude   (SREAGENT_LLM)
+   ▲
+ContextBuilder ─► Redis (or in-memory fallback): turns, incident state, facts
 ```
 
 - `src/sreagent/tickets/` — `Ticket` model (severity, status, timeline, root cause), in-memory `TicketStore` seeded with `SEV2-1042` (5xx on checkout-api) and `SEV2-1038` (disk pressure).
 - `src/sreagent/runbooks/` — markdown runbooks with `triggers:`, `## Diagnostic commands` (`$ …` lines the agent runs), and `## Suspect code patterns` (regexes the agent searches for in the repo).
 - `src/sreagent/hosts/` — `CommandPolicy` (default-deny read-only allowlist), `HostInventory`, `SimulatedBackend` (deterministic scripted fleet) and `SSHBackend` (real SSH via paramiko, `pip install sreagent[ssh]`; still policy-gated).
 - `src/sreagent/sandbox/` — `SandboxManager.clone()` copies a local dir or `git clone`s a URL; `Sandbox.search/read_file/run` with `shell=False`, timeouts, and a destructive-token denylist.
-- `src/sreagent/servers/` — `tickets_mcp.py`, `hosts_mcp.py`, `repo_mcp.py`.
+- `src/sreagent/servers/` — `tickets_mcp.py`, `hosts_mcp.py`, `logs_mcp.py`, `repo_mcp.py`.
+  Every server prints its tool manifest with `python -m sreagent.servers.<name>_mcp --manifest`
+  (`manifest.json` contract); the client fetches it to validate tool arguments before calling.
 - `src/sreagent/agent/` — `SREAgent` staged pipeline + ReAct loop, prompts.
 - Reused from the finagent/oms-agent lineage: OpenAI-compatible inference server, priority/token-budget context manager, multi-server MCP client, RAG pipeline.
 
