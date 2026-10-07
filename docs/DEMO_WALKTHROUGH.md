@@ -51,17 +51,21 @@ Watch the `INVESTIGATION STEPS` section print the pipeline in order:
 step 1. Ticket fetched and claimed
 step 2. Runbook matched (RAG + keyword)
 step 3. Log search on affected hosts — error signatures
-step 4. Host lookup — read-only diagnostics
-step 5. Code repository downloaded to sandbox
-step 6. Suspect code search in sandbox
-step 7. Sandbox repro run
-step 8. RCA — ticket updated with root cause
+step 4. Previous similar incidents — prior RCA pulled in
+step 5. Host lookup — read-only diagnostics
+step 6. Code repository downloaded to sandbox
+step 7. Suspect code search in sandbox
+step 8. Sandbox repro run
+step 9. RCA — ticket updated with root cause
 ```
 
-The LLM reasons through the runbook **and** the logs: step 3 searches
-`checkout-api-02` for the runbook's error signatures (`Out of memory`,
-` 500 `, `Traceback`), and whatever it finds lands in the prompt context
-(`log evidence` section) before host diagnostics run. In `run_react` mode
+The LLM reasons through the runbook, the logs, **and** previous incidents:
+step 3 searches `checkout-api-02` for the runbook's error signatures
+(`Out of memory`, ` 500 `, `Traceback`), and whatever it finds lands in the
+prompt context (`log evidence` section); step 4 pulls previous SEV2s on the
+same host with the same failure signature — a resolved predecessor's
+recorded root cause (`previous similar incidents` section) becomes the
+leading hypothesis. In `run_react` mode
 each round's observation is likewise fed back into context (`round-N`
 sections, last 6 kept) so the next action builds on accumulated evidence.
 

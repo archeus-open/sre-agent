@@ -29,6 +29,23 @@ def test_mock_llm_is_keyword_driven_and_deterministic():
     assert llm.describe() == {"provider": "mock", "model": "mock-demo-v1"}
 
 
+def test_mock_llm_reacts_to_previous_incident_context():
+    llm = MockLLM()
+    messages = [
+        {"role": "user", "content": "### ticket\nSEV2-1042: 5xx spike"},
+        {"role": "user", "content": "### previous similar incidents\n"
+                                   "SEV2-1019 [RESOLVED] Worker OOM-killed\n"
+                                   "root cause: unbounded ORDER_CACHE"},
+        {"role": "user", "content": "Write the incident report now."},
+    ]
+    # the mock scans the whole context, not just the trailing prompt
+    reply = llm.complete(messages)
+    assert "previous similar incident" in reply.lower()
+    assert "leading hypothesis" in reply.lower()
+    # ... and stays deterministic
+    assert llm.complete(messages) == reply
+
+
 def test_orchestrator_defaults_to_mock(monkeypatch):
     monkeypatch.delenv("SREAGENT_LLM", raising=False)
     orch = LLMOrchestrator()

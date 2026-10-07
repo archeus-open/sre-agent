@@ -45,6 +45,7 @@ STEP_LABELS = [
     ("[mcp] tickets.get_ticket", "Ticket fetched and claimed"),
     ("[runbook]", "Runbook matched (RAG + keyword)"),
     ("[mcp] logs.search_logs", "Log search on affected hosts — error signatures"),
+    ("[mcp] tickets.find_similar_incidents", "Previous similar incidents — prior RCA pulled in"),
     ("[mcp] hosts.run_command", "Host lookup — read-only diagnostics"),
     ("[mcp] repo.clone_repo", "Code repository downloaded to sandbox"),
     ("[mcp] repo.search_code", "Suspect code search in sandbox"),

@@ -17,7 +17,7 @@ from sreagent.tickets import TicketStatus, TicketStore
 
 mcp = FastMCP("tickets")
 
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.2.0"
 _store = TicketStore.seed_demo()
 
 
@@ -44,6 +44,18 @@ def get_ticket(ticket_id: str) -> str:
     """Fetch one ticket with its full timeline."""
     try:
         return _ok({"ticket": _store.get(ticket_id).to_dict()})
+    except Exception as e:
+        return _err(str(e))
+
+
+@mcp.tool()
+def find_similar_incidents(ticket_id: str, limit: int = 3) -> str:
+    """Find previous incidents on the same host(s) with the same failure
+    signature (e.g. OOM, http-5xx, disk-pressure). Resolved incidents sort
+    first — their recorded root cause / remediation is what the responder
+    should learn from."""
+    try:
+        return _ok({"similar": _store.find_similar(ticket_id, limit=limit)})
     except Exception as e:
         return _err(str(e))
 

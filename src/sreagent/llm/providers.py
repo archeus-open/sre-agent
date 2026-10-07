@@ -50,11 +50,20 @@ class MockLLM(LLMProvider):
         super().__init__(model)
 
     def complete(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
-        user_text = next(
-            (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"),
-            "",
+        # Scan the whole user-visible context (all context sections are
+        # user-role messages), not just the trailing prompt — the mock
+        # should react to evidence like a real model would.
+        user_text = "\n".join(
+            m.get("content", "") for m in messages if m.get("role") == "user"
         )
         text = user_text.lower()
+        if re.search(r"previous similar incident|prior incident", text):
+            return (
+                "[mock] Previous similar incident on the same host with the same "
+                "failure signature found: adopt its recorded root cause as the "
+                "leading hypothesis, verify it against the fresh log/host evidence, "
+                "and check whether its remediation was already applied here."
+            )
         if re.search(r"oom|out of memory|memory", text):
             return (
                 "[mock] Likely memory pressure: correlate OOM-killer lines in dmesg "

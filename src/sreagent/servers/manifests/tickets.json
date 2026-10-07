@@ -1,7 +1,7 @@
 {
   "manifest_version": 1,
   "server": "tickets",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "tools": [
     {
       "name": "list_tickets",
@@ -51,6 +51,28 @@
           "ticket_id"
         ],
         "title": "get_ticketArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "find_similar_incidents",
+      "description": "Find previous incidents on the same host(s) with the same failure\n    signature (e.g. OOM, http-5xx, disk-pressure). Resolved incidents sort\n    first \u2014 their recorded root cause / remediation is what the responder\n    should learn from.",
+      "input_schema": {
+        "properties": {
+          "ticket_id": {
+            "title": "Ticket Id",
+            "type": "string"
+          },
+          "limit": {
+            "default": 3,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ticket_id"
+        ],
+        "title": "find_similar_incidentsArguments",
         "type": "object"
       }
     },

@@ -66,6 +66,12 @@ async def test_staged_incident_response_updates_ticket(monkeypatch, mcp_config):
     # log evidence made it into the LLM context
     assert "log evidence" in " ".join(
         s for s in report.context_stats if s.startswith("tokens:"))
+    # previous-similar-incident search ran and fed the LLM context
+    assert any("tickets.find_similar_incidents" in s for s in report.sources)
+    assert "previous similar incidents" in " ".join(
+        s for s in report.context_stats if s.startswith("tokens:"))
+    # ... and was written back to the ticket timeline
+    assert any("SEV2-1019" in e["text"] for e in ticket["timeline"])
 
     assert ticket["status"] == "INVESTIGATING"
     assert ticket["assignee"] == "sre-agent"

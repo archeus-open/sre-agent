@@ -171,6 +171,30 @@ class SREAgent:
         except Exception as exc:  # noqa: BLE001 — logs MCP not connected; host evidence still applies
             log.warning("Skipping log search step: %s", exc)
 
+        # 2c. Previous similar incidents: same host(s), same failure
+        # signature. A resolved predecessor's recorded root cause is the
+        # strongest prior the LLM gets — fed in alongside the log evidence.
+        prev_incidents: list[dict] = []
+        try:
+            prev_incidents = (await self._tool("tickets", "find_similar_incidents", {
+                "ticket_id": ticket_id, "limit": 3,
+            })).get("similar", [])
+            if prev_incidents:
+                lines = []
+                for p in prev_incidents:
+                    lines.append(
+                        f"{p['ticket_id']} [{p['status']}] {p['title']}\n"
+                        f"  matched hosts: {', '.join(p['matched_hosts'])}; "
+                        f"failure signatures: {', '.join(p['matched_signatures'])}\n"
+                        f"  root cause: {p['root_cause'] or '(not recorded)'}\n"
+                        f"  remediation: {p['remediation'] or '(not recorded)'}"
+                    )
+                self.context.add_section(
+                    "previous similar incidents", "\n".join(lines), priority=86)
+                sources.append("[mcp] tickets.find_similar_incidents")
+        except Exception as exc:  # noqa: BLE001 — never let history lookup kill the response
+            log.warning("Skipping previous-incident search: %s", exc)
+
         # 3. Host evidence (read-only commands on affected hosts).
         evidence: list[str] = []
         for host in ticket.get("affected_hosts", []):
@@ -230,6 +254,11 @@ class SREAgent:
             "code_suspects": code_notes[:10],
             "repro": repro_out[:1500],
             "runbook": runbook.name if runbook else None,
+            "previous_incidents": [
+                {"ticket_id": p["ticket_id"], "status": p["status"],
+                 "root_cause": p["root_cause"]}
+                for p in prev_incidents
+            ],
         }
         self.context.add_section("findings-draft", json.dumps(findings, indent=1), priority=88)
 
@@ -244,6 +273,14 @@ class SREAgent:
 
         # 6. Write everything back to the ticket.
         entries = 0
+        if prev_incidents:
+            await self._tool("tickets", "add_timeline_entry", {
+                "ticket_id": ticket_id, "author": "sre-agent",
+                "text": "Previous similar incidents (same host, same failure):\n- " + "\n- ".join(
+                    f"{p['ticket_id']} [{p['status']}] {p['title']} — "
+                    f"root cause: {p['root_cause'] or 'not recorded'}"
+                    for p in prev_incidents)})
+            entries += 1
         if findings["anomalies"]:
             await self._tool("tickets", "add_timeline_entry", {
                 "ticket_id": ticket_id, "author": "sre-agent",
