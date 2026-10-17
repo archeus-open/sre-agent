@@ -5,6 +5,10 @@
   via the model name). Key from ``OPENAI_API_KEY`` or the constructor.
 - ``ClaudeProvider``: Anthropic Messages API. Key from ``ANTHROPIC_API_KEY``
   or the constructor.
+- ``OpenRouterProvider``: OpenRouter gateway over its OpenAI-compatible
+  API. Free models carry a ``:free`` suffix; the default ``openrouter/free``
+  auto-routes to whatever free model currently has capacity. Key from
+  ``OPENROUTER_API_KEY`` or the constructor.
 
 API keys are *never* hardcoded or logged — they come from the environment
 or explicit constructor arguments. Anything that would spend money raises
@@ -127,6 +131,11 @@ class OpenAIProvider(_HTTPChatProvider):
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
 
+    @property
+    def extra_headers(self) -> dict[str, str]:
+        """App-identifying headers some OpenAI-compatible gateways ask for."""
+        return {}
+
     def complete(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         key = self._require_key(self.api_key)
         payload: dict[str, Any] = {
@@ -140,10 +149,49 @@ class OpenAIProvider(_HTTPChatProvider):
             resp = client.post(
                 f"{self.base_url}/chat/completions",
                 json=payload,
-                headers=self._redacted_headers(key),
+                headers=self._redacted_headers(key, self.extra_headers or None),
             )
             resp.raise_for_status()
             return resp.json()["choices"][0]["message"]["content"]
+
+
+class OpenRouterProvider(OpenAIProvider):
+    """OpenRouter gateway (OpenAI-compatible chat-completions API).
+
+    ``model`` picks the route: free models carry a ``:free`` suffix. The
+    default ``openrouter/free`` auto-routes to whichever free model
+    currently has capacity, so the demo never pins a single free route
+    that could be rate-limited or retired. Pin a specific one with
+    ``SREAGENT_OPENROUTER_MODEL`` (e.g.
+    ``nvidia/nemotron-3-ultra-550b-a55b:free``). Key from
+    ``OPENROUTER_API_KEY`` (free at https://openrouter.ai, no card needed
+    for the free tier).
+    """
+
+    name = "openrouter"
+    api_key_env = "OPENROUTER_API_KEY"
+
+    def __init__(
+        self,
+        model: str | None = None,
+        api_key: str | None = None,
+        base_url: str = "https://openrouter.ai/api/v1",
+        timeout_s: float = 120.0,
+    ) -> None:
+        super().__init__(
+            model=model or os.getenv("SREAGENT_OPENROUTER_MODEL", "openrouter/free"),
+            api_key=api_key,
+            base_url=base_url,
+            timeout_s=timeout_s,
+        )
+
+    @property
+    def extra_headers(self) -> dict[str, str]:
+        # OpenRouter asks callers to identify the app; harmless and free.
+        return {
+            "HTTP-Referer": "https://github.com/archeus-open/sre-agent",
+            "X-Title": "sre-agent",
+        }
 
 
 class ClaudeProvider(_HTTPChatProvider):

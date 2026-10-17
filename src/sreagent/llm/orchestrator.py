@@ -17,7 +17,13 @@ import logging
 import os
 from typing import Any
 
-from .providers import ClaudeProvider, LLMProvider, MockLLM, OpenAIProvider
+from .providers import (
+    ClaudeProvider,
+    LLMProvider,
+    MockLLM,
+    OpenAIProvider,
+    OpenRouterProvider,
+)
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +33,7 @@ _REGISTRY: dict[str, type[LLMProvider]] = {
     "codex": OpenAIProvider,  # Codex models ride the OpenAI API; pick via model name
     "anthropic": ClaudeProvider,
     "claude": ClaudeProvider,
+    "openrouter": OpenRouterProvider,  # free tier via OPENROUTER_API_KEY
 }
 
 

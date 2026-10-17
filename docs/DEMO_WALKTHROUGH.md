@@ -190,12 +190,14 @@ Keys come **only** from the environment (or explicit constructor args) —
 never hardcoded, never logged:
 
 ```bash
-export SREAGENT_LLM=openai              # or: claude | codex | mock
+export SREAGENT_LLM=openai              # or: claude | codex | openrouter | mock
 export OPENAI_API_KEY=sk-...           # only when you opt in
 export ANTHROPIC_API_KEY=sk-ant-...    # only when you opt in
+export OPENROUTER_API_KEY=<redacted>  # free at https://openrouter.ai - no card needed
 # optional model pins:
 export SREAGENT_OPENAI_MODEL=gpt-4o            # Codex: codex-mini-latest
 export SREAGENT_ANTHROPIC_MODEL=claude-sonnet-4-20250514
+export SREAGENT_OPENROUTER_MODEL=openrouter/free   # auto-routes to a free model with capacity
 ```
 
 ```python
@@ -227,11 +229,13 @@ The gateway ships as a **reference** implementation. Before real traffic:
 |---|---|---|
 | `SREAGENT_CACHE` | `auto` | `redis` / `memory` / `auto` (Redis if reachable) |
 | `SREAGENT_REDIS_URL` | `redis://localhost:6379/0` | Redis server for `RedisCache` |
-| `SREAGENT_LLM` | `mock` | `mock` / `openai` / `codex` / `claude` / `anthropic` |
+| `SREAGENT_LLM` | `mock` | `mock` / `openai` / `codex` / `claude` / `anthropic` / `openrouter` |
 | `OPENAI_API_KEY` | — | User-provided OpenAI key (Codex models via `SREAGENT_OPENAI_MODEL`) |
 | `ANTHROPIC_API_KEY` | — | User-provided Anthropic key |
+| `OPENROUTER_API_KEY` | — | User-provided OpenRouter key (free tier, no card) |
 | `SREAGENT_OPENAI_MODEL` | `gpt-4o-mini` | Model name sent to OpenAI |
 | `SREAGENT_ANTHROPIC_MODEL` | `claude-sonnet-4-20250514` | Model name sent to Anthropic |
+| `SREAGENT_OPENROUTER_MODEL` | `openrouter/free` | Model route sent to OpenRouter (`:free` = free tier) |
 | `SREAGENT_GATEWAY_KEYS` | demo keys | `key:role,...` (`viewer`/`operator`/`admin`) |
 | `SREAGENT_GATEWAY_RATE_LIMIT` | `60` | Requests/minute per API key |
 | `SREAGENT_GATEWAY_UPSTREAMS` | — | Comma-separated upstream base URLs |

@@ -12,6 +12,7 @@ from sreagent.llm import (
     LLMProvider,
     MockLLM,
     OpenAIProvider,
+    OpenRouterProvider,
 )
 
 
@@ -119,4 +120,47 @@ def test_orchestrator_describe():
     orch = LLMOrchestrator(default="mock")
     info = orch.describe()
     assert info["default"] == "mock"
-    assert set(info["available"]) >= {"mock", "openai", "claude"}
+    assert set(info["available"]) >= {"mock", "openai", "claude", "openrouter"}
+
+
+def test_openrouter_requires_key_before_network(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
+        OpenRouterProvider().complete(_msgs())
+
+
+def test_openrouter_defaults_to_free_router(monkeypatch):
+    monkeypatch.delenv("SREAGENT_OPENROUTER_MODEL", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    llm = OpenRouterProvider()
+    assert llm.model == "openrouter/free"
+    assert llm.describe() == {"provider": "openrouter", "model": "openrouter/free"}
+    assert llm.base_url == "https://openrouter.ai/api/v1"
+    # app-identifying headers OpenRouter asks for
+    assert llm.extra_headers["HTTP-Referer"].startswith("https://")
+    assert llm.extra_headers["X-Title"] == "sre-agent"
+
+
+def test_openrouter_model_env_and_explicit_override(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("SREAGENT_OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+    assert OpenRouterProvider().model == "nvidia/nemotron-3-ultra-550b-a55b:free"
+    assert OpenRouterProvider(model="openai/gpt-oss-20b:free").model == "openai/gpt-oss-20b:free"
+
+
+def test_orchestrator_selects_openrouter_via_env(monkeypatch):
+    monkeypatch.setenv("SREAGENT_LLM", "openrouter")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    orch = LLMOrchestrator(fallback_to_mock=False)
+    assert isinstance(orch.get_provider(), OpenRouterProvider)
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
+        orch.complete(_msgs())
+
+
+def test_orchestrator_falls_back_to_mock_on_openrouter_failure(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    orch = LLMOrchestrator(default="openrouter", fallback_to_mock=True)
+    text = orch.complete(_msgs("disk full"))
+    assert text.startswith("[mock]")
+    assert orch.last_call["fallback"] is True
+    assert "OPENROUTER_API_KEY" in orch.last_call["error"]

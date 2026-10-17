@@ -49,8 +49,10 @@ python examples\triage_direct.py
 - **`src/sreagent/llm/` — agent orchestration.** One interface, several
   models: `mock` (deterministic demo, default — no key, no cost),
   `openai`/`codex` (user's `OPENAI_API_KEY`), `claude` (user's
-  `ANTHROPIC_API_KEY`). `LLMOrchestrator` routes per call and falls back
-  to mock when a paid provider fails. Select with `SREAGENT_LLM`.
+  `ANTHROPIC_API_KEY`), `openrouter` (user's `OPENROUTER_API_KEY` —
+  free tier via `:free` models, no card needed). `LLMOrchestrator`
+  routes per call and falls back to mock when a paid provider fails.
+  Select with `SREAGENT_LLM`.
 - **`src/sreagent/gateway/` — API gateway.** FastAPI reference gateway
   with mock API-key auth (`X-API-Key`), role-based authz
   (`viewer`/`operator`/`admin`), per-key token-bucket rate limiting
